@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# If the wrapper is executed with no arguments, or if the argument is -h|--help then
+# simply execute the cfs_archive.py script -h without extra arguments or permissions
+if [ $# == 0 ] || [ $1 == "-h" ]  || [ $1 == "--help" ] ; then
+	/usr/local/bin/cfs_archive.py -h
+# All other cases
+else
+	# Setup a variable containing the groups the user belongs to as a csv.
+	# This is needed due to the sudo ... after a sudo, you can determine the previous
+	# user by grabbing the $SUDO_USER environment variable, but the groups info is lost.
+	grps="`id -G | sed -e 's/\ /,/g'`"
+	# A breakdown of the command to execute the cfs_archive.py application
+	# nice:  required so that the archive prrocess runs with a lower priority than normal
+	# nohup:  run in the background and igmore SIGHUP signals
+	# sudo:  run the following program as root, as defined in /etc/sudoers
+	# $@:  the argument list passed to cfs_archive.py from the user
+	# -g $grps:  the group list collected before the sudo was performed.
+	# < /dev/null:  don't wait for input
+	# >> archive.out 2>&1:  redirect stdout to archive.log, redirect stderr to stdout
+	# &: run in background
+	nice nohup /usr/bin/sudo /usr/local/bin/cfs_archive.py "$@" -g $grps < /dev/null >> archive.out 2>&1 & 
+fi
