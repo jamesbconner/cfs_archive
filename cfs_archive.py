@@ -177,11 +177,14 @@ solrInstance="live"
 def publishMeta(mdList):
 	""" Establish the Solr Instance, add the metadata, and commit it"""
 	try:
+		# Instantiate the interface to the Solr instance
 		si = sunburnt.SolrInterface("http://%s:%s/solr/%s/" % (solrServer,solrPort,solrInstance))
+		# Add the XML metadata to the instance
 		si.add(mdList)
 	except:
 		raise
 	finally:
+		# Commit/Save the metadata
 		si.commit()
 
 
@@ -190,10 +193,16 @@ def publishMeta(mdList):
 def perfMeta(fileNameList,archPath,mnt,client):
 	""" Create the metadata for the file for search engine """
 
+	# Declare the archFile and metaFile locations
 	archFile = os.path.join(archPath,fileStamp+archiveExt)
 	metaFile = os.path.join(archPath,fileStamp+archiveMetaExt)
+
+	# Create an empty list for the file/dir metadata
 	mdList = []
 
+	# Create the XML element "add".  This element is required
+	# for Solr to add it to the instance.  All of the file
+	# metadata xml 'doc' entries will go under this element.
 	xmlTop = ET.Element("add")
 
 
@@ -202,7 +211,9 @@ def perfMeta(fileNameList,archPath,mnt,client):
 		# Check if the file is an actual file
 		if os.path.isfile(fileName):
 
+			# Create an empty dict for the file
 			fileDict={}
+
 			fileDict = fileInfo(fileName)
 			fileDict["id"] = perfHash(fileName)
 			fileDict["market"] = client
@@ -211,7 +222,11 @@ def perfMeta(fileNameList,archPath,mnt,client):
 			fileDict["archive_time"] = tdyISO
 			fileDict["archive_owner"] = sudoUser
 
+			# Create a 'doc' element under 'add' for the file data
 			xmlRecord = ET.SubElement(xmlTop,"doc")
+
+			# For each metadata key in the file dict, create a field
+			# in the XML and add the value.
 			for key in fileDict:
 				field = ET.SubElement(xmlRecord,"field",name=key)
 				field.text = str(fileDict[key])
@@ -234,7 +249,9 @@ def perfMeta(fileNameList,archPath,mnt,client):
 						# of the file in question.
 						fn=os.path.join(root,names)
 
+						# Create an empty dict for the file
 						fileDict={}
+
 						fileDict = fileInfo(fn)
 						fileDict["id"] = perfHash(fn)
 						fileDict["market"] = client
@@ -243,7 +260,11 @@ def perfMeta(fileNameList,archPath,mnt,client):
 						fileDict["archive_time"] = tdyISO
 						fileDict["archive_owner"] = sudoUser
 
+						# Create a 'doc' element under the 'add' for the file data
 						xmlRecord = ET.SubElement(xmlTop,"doc")
+
+						# For each metadata key in the file dict, create a field
+						# in the XML and add the value.
 						for key in fileDict:
 							field = ET.SubElement(xmlRecord,"field",name=key)
 							field.text = str(fileDict[key])
@@ -260,7 +281,10 @@ def perfMeta(fileNameList,archPath,mnt,client):
 		else:
 			pass
 
+	# Write out the metaFile with the full XML data of all the files
 	ET.ElementTree(xmlTop).write(metaFile)
+
+	# Publish the metadata to Solr
 	publishMeta(mdList)
 
 
@@ -302,6 +326,7 @@ def fileInfo(fileName):
 
 def time8601(tzTimeStamp):
 	"""Create an ISO 8601 timestamp"""
+	# Solr requires a combined ISO8601 timestamp format with UTC (Z = Zulu) flag
 	return(datetime.datetime.utcfromtimestamp(tzTimeStamp).isoformat()+"Z")
 
 
@@ -406,25 +431,36 @@ def unTarObj(fileName):
 
 def rmFiles(fileNameList,archPath):
 	"""Remove the original files after they have been archived"""
+	# Set a local variable for the person who executed the script
 	sudoID=user_to_uid(sudoUser)
 	
 	for fileName in fileNameList:
+		# Let's be certain who we are ... set user/group to root
 		os.setuid(0)
 		os.setgid(0)
 
+		# Get the group ownership of the file in question
 		groupID=os.stat(fileName)[5]
+
+		# Check to see if the original user is in the group
 		if userInGrp(sudoID,groupID) == True:
 			# Downgrade the user perms to the sudo user who instantiated the process
 			os.setegid(groupID)
 		else:
+			# User wasn't in the group, so let's use the default user's group
 			os.setegid(1000)
+
+		# Drop user privs to the original user
 		os.seteuid(sudoID)
 		
 
+		# Perform all tests as the original user
+		# Trying to remove a mount point is not going to work
 		if os.path.ismount(fileName):
 			print("Cannot remove a mount point!")
 			sys.exit(7003)
 			
+		# Test if fileName is a file
 		elif os.path.isfile(fileName):
 			try:
 				os.remove(fileName)
@@ -433,6 +469,7 @@ def rmFiles(fileNameList,archPath):
 				raise
 				sys.exit(7002)
 
+		# Test if fileName is a directory
 		elif os.path.isdir(fileName):
 			try:
 				shutil.rmtree(fileName)
@@ -441,6 +478,7 @@ def rmFiles(fileNameList,archPath):
 				raise
 				sys.exit(7001)
 
+		# If fileName is something else (block,pipe,etc), exit!
 		else:
 			print("Unknown filetype set for deletion, erroring out")
 			raise
